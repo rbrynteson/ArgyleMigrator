@@ -47,7 +47,8 @@ This tool uses the Microsoft Graph API to create the new Team and Channels.  You
 5. Fill in the Name and Supported Account Types.  You can choose Accounts in this organization directory only.  Recommended name is ArgyleMigrator.  Click Create.
 6. Once created, under Certificates & Secrets.  Click on Client Secrets. Click on New Client Secret.  Fill in the description and choose the expiration.  Click Add.  Make sure to note the client secret.
 7. Go to API Permissions. Click on Add a permission.  Choose Microsoft Graph.  Choose Application Permissions.  Choose the following permissions: Channel.Create, Files.Read.Add, Files.ReadWrite.All, Group.ReadWrite.All, Team.Create, Team.ReadBasic.All, Teamwork.Migrate.All, User.Read, User.Read.All.  Click Add permissions.
-8. Take note of the following: Application (client) ID, Directory (tenant) ID, and the Client Secret.
+![image](https://github.com/user-attachments/assets/68dc5e47-ab74-4951-a338-fe06ccc0932d)
+9. Take note of the following: Application (client) ID, Directory (tenant) ID, and the Client Secret.
 
 ### Clone And Use The App
 
@@ -61,6 +62,7 @@ As of right now, you need to use Visual Studio 2022 to build the application and
 - Open program.cs and update the Team Name you want to create.  By deafult it is migration001.  (NOTE: This will change soon to a parameter.)
 - Copy the zip file from the Slack export to the program folder.  It should be at the same level as program.cs file.  Rename the file to slack.zip.
 - Ensure it is set to debug and set the debug properties to slack.zip.
+![image](https://github.com/user-attachments/assets/ba058c93-b5ad-4b7b-9903-7d1fcc0da15d)
 - Run the program.
 
 This will create a file named slack_users.json.  Copy the file to the program folder as it will be used in Phase 2.  Update the file with the matching O365 Object ID.
@@ -68,11 +70,13 @@ This will create a file named slack_users.json.  Copy the file to the program fo
 ### Phase 2
 
 - Modify the debug properties and add the path to your slack_users.json file.
+![image](https://github.com/user-attachments/assets/a528fab9-d353-4894-b59e-401554c34759)
 - Run the program
 - The program will create the team and channels first. It will then ask if you want to upload the files.
-
+![image](https://github.com/user-attachments/assets/a5a18130-0052-440d-9418-15b63f1e4e16)
 - The program will then upload the files into the correct channel folders.
 - Once it is complete, the program will convert the channels and teams to standard mode.
+![image](https://github.com/user-attachments/assets/92551d13-bddf-45e3-8162-21967799e1e1)
 
 This code is provided as is and is not supported by Microsoft.  It is provided as a starting point for your migration.  It is recommended to test this in a non-production environment first.
 
