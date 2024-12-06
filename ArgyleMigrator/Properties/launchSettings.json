@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ArgyleMigrator": {
+      "commandName": "Project",
+      "commandLineArgs": "slack.zip slack_users.json"
+    }
+  }
+}
