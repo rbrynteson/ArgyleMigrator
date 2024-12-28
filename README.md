@@ -62,7 +62,7 @@ As of right now, you need to use Visual Studio 2022 to build the application and
 - Open program.cs and update the Team Name you want to create.  By deafult it is migration001.  (NOTE: This will change soon to a parameter.)
 - Copy the zip file from the Slack export to the program folder.  It should be at the same level as program.cs file.  Rename the file to slack.zip.
 - Ensure it is set to debug and set the debug properties to slack.zip.
-![image](https://github.com/user-attachments/assets/ba058c93-b5ad-4b7b-9903-7d1fcc0da15d)
+![image](https://github.com/user-attachments/assets/093a34fc-ff9b-47ec-b048-5073550bd880)
 - Run the program.
 
 This will create a file named slack_users.json.  Copy the file to the program folder as it will be used in Phase 2.  Update the file with the matching O365 Object ID.
