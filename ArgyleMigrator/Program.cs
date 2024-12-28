@@ -25,7 +25,6 @@ namespace ArgyleMigrator
             string slackArchiveBasePath = "";
             string slackArchiveTempPath = "";
             string channelsPath = "";
-            bool channelsOnly = false;
             bool copyFileAttachments = false;
 
             if (args.Length == 0)
@@ -88,8 +87,8 @@ namespace ArgyleMigrator
 
                 Console.WriteLine("");
                 Console.WriteLine("****************************************************************************************************");
-                Console.WriteLine("Welcome to Argyle Migrator - Phase 2!");
-                Console.WriteLine("This tool will now proceed to migrate Slack channels and messages to Microsoft Teams.");
+                Console.WriteLine("*                       Welcome to Argyle Migrator - Phase 2!                                      *");
+                Console.WriteLine("*      This tool will now proceed to migrate Slack channels and messages to Microsoft Teams.       *");
                 Console.WriteLine("****************************************************************************************************");
                 Console.WriteLine("");
 
