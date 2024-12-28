@@ -67,10 +67,11 @@ namespace ArgyleMigrator
                 Environment.Exit(0);
             }
 
-            if (args.Length == 2)
+            if (args.Length == 3)
             {
                 var slackArchivePath = args[0];
                 var usersJsonPath = args[1];
+                var migrationTeamName = args[2];
 
                 if (!File.Exists(slackArchivePath) || !File.Exists(usersJsonPath))
                 {
@@ -109,7 +110,7 @@ namespace ArgyleMigrator
                 // Create a new Team for migration
                 Console.WriteLine("****************************************************************************************************");
                 Console.WriteLine("STEP #1: Create Migration Team:");
-                var createdTeam = await Teams.CreateTeamInMsTeams(aadAccessToken, "migration001", "Team used for migration purposes.");
+                var createdTeam = await Teams.CreateTeamInMsTeams(aadAccessToken, migrationTeamName, "Team used for migration purposes.");
                 if (createdTeam != null)
                 {
                     Console.WriteLine($"Created Team ID: {createdTeam.Id}");

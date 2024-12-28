@@ -69,7 +69,7 @@ This will create a file named slack_users.json.  Copy the file to the program fo
 
 ### Phase 2
 
-- Modify the debug properties and add the path to your slack_users.json file.
+- Modify the debug properties and add the path to your slack_users.json file and team migration name.
 ![image](https://github.com/user-attachments/assets/a528fab9-d353-4894-b59e-401554c34759)
 - Run the program
 - The program will create the team and channels first. It will then ask if you want to upload the files.

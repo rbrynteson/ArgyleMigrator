@@ -2,7 +2,7 @@
   "profiles": {
     "ArgyleMigrator": {
       "commandName": "Project",
-      "commandLineArgs": "slack.zip slack_users.json"
+      "commandLineArgs": "slack.zip slack_users.json migration10001"
     }
   }
 }
