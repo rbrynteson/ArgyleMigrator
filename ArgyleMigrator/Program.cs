@@ -33,7 +33,7 @@ namespace ArgyleMigrator
                 Console.WriteLine("Please provide arguments to run this application.");
                 Console.WriteLine("Usage:");
                 Console.WriteLine("Phase 1: ArgyleMigrator.exe <path_to_slack_archive_zip>");
-                Console.WriteLine("Phase 2: ArgyleMigrator.exe <path_to_slack_archive_zip> <path_to_users_json>");
+                Console.WriteLine("Phase 2: ArgyleMigrator.exe <path_to_slack_archive_zip> <path_to_users_json> <TeamMigrationName>");
                 Environment.Exit(1);
             }
 
