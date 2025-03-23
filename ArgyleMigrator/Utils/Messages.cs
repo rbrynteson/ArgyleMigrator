@@ -180,6 +180,15 @@ namespace ArgyleMigrator.Utils
 
             await PostMessagesToChannel(aadAccessToken, selectedTeamId, channelsMapping.Id, messageList, slackUserList);
 
+            // Update migration state with message and file counts
+            MigrationStateManager.UpdateChannelState(channelsMapping.Id, state =>
+            {
+                state.MessageCount = messageList.Count;
+                state.FilesImported = copyFileAttachments;
+                state.FileCount = messageList.Sum(m => m.attachments?.Count ?? 0);
+                state.MessagesImported = true;
+            });
+
             return attachmentsToUpload;
         }
 

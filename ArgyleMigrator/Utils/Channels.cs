@@ -9,6 +9,7 @@ using ArgyleMigrator.Models;
 using System.Threading.Tasks;
 using RestSharp;
 using static ArgyleMigrator.Models.MsTeams;
+using System.Linq;
 
 namespace ArgyleMigrator.Utils
 {
@@ -16,43 +17,79 @@ namespace ArgyleMigrator.Utils
     {
         public static List<Slack.Channels> ScanSlackChannelsJson(string combinedPath)
         {
-            List<Slack.Channels> slackChannels = new List<Slack.Channels>();
-
-            using (FileStream fs = new FileStream(combinedPath, FileMode.Open, FileAccess.Read))
-            using (StreamReader sr = new StreamReader(fs))
-            using (JsonTextReader reader = new JsonTextReader(sr))
+            try
             {
-                while (reader.Read())
+                Logger.Information("Starting to scan Slack channels from {Path}", combinedPath);
+                List<Slack.Channels> slackChannels = new List<Slack.Channels>();
+
+                using (FileStream fs = new FileStream(combinedPath, FileMode.Open, FileAccess.Read))
+                using (StreamReader sr = new StreamReader(fs))
+                using (JsonTextReader reader = new JsonTextReader(sr))
                 {
-                    if (reader.TokenType == JsonToken.StartObject)
+                    while (reader.Read())
                     {
-                        JObject obj = JObject.Load(reader);
-
-                        // don't force use of the Slack channel id field in a channels.json only creation operation
-                        // i.e. we're not importing from a Slack archive but simply bulk creating new channels
-                        // this means we must check if "id" is null, otherwise we get an exception
-
-                        var channelId = (string)obj.SelectToken("id");
-                        if (channelId == null) {
-                            channelId = "";
-                        }
-
-                        slackChannels.Add(new Models.Slack.Channels()
+                        if (reader.TokenType == JsonToken.StartObject)
                         {
-                            channelId = channelId,
-                            channelName = obj["name"].ToString(),
-                            channelDescription = obj["purpose"]["value"].ToString()
-                        });
+                            JObject obj = JObject.Load(reader);
 
-                        // artificially limit the number of channels scanned as to make testing go faster
-                        if (slackChannels.Count > 10)
-                        {
-                            return slackChannels;
+                            var channelId = (string)obj.SelectToken("id") ?? "";
+                            var channelName = obj["name"].ToString();
+                            var channelDescription = obj["purpose"]["value"].ToString();
+
+                            slackChannels.Add(new Models.Slack.Channels()
+                            {
+                                channelId = channelId,
+                                channelName = channelName,
+                                channelDescription = channelDescription
+                            });
+
+                            Logger.Debug("Found channel: {ChannelName} ({ChannelId})", channelName, channelId);
                         }
                     }
                 }
+
+                Logger.Information("Completed scanning Slack channels. Found {Count} channels", slackChannels.Count);
+                return slackChannels;
             }
-            return slackChannels;
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error scanning Slack channels from {Path}", combinedPath);
+                throw;
+            }
+        }
+
+        public static List<Slack.Channels> SelectChannelsToMigrate(List<Slack.Channels> allChannels)
+        {
+            var selectedChannels = new List<Slack.Channels>();
+            
+            Console.WriteLine("\nAvailable channels to migrate:");
+            for (int i = 0; i < allChannels.Count; i++)
+            {
+                Console.WriteLine($"{i + 1}. {allChannels[i].channelName} - {allChannels[i].channelDescription}");
+            }
+
+            Console.WriteLine("\nEnter the numbers of channels to migrate (comma-separated) or 'all' to migrate everything:");
+            var input = Console.ReadLine();
+
+            if (input.ToLower() == "all")
+            {
+                return allChannels;
+            }
+
+            var selectedIndices = input.Split(',')
+                .Select(x => x.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => int.TryParse(x, out int index) ? index - 1 : -1)
+                .Where(x => x >= 0 && x < allChannels.Count)
+                .Distinct();
+
+            foreach (var index in selectedIndices)
+            {
+                selectedChannels.Add(allChannels[index]);
+                Logger.Information("Selected channel for migration: {ChannelName}", allChannels[index].channelName);
+            }
+
+            return selectedChannels;
         }
 
         public static async Task<List<Combined.ChannelsMapping>> CreateChannelsInMsTeams(string aadAccessToken, string teamId, List<Slack.Channels> slackChannels, string basePath)
@@ -61,34 +98,30 @@ namespace ArgyleMigrator.Utils
 
             using (HttpClient httpClient = new HttpClient())
             {
-                // Set up HttpClient with the access token
                 httpClient.DefaultRequestHeaders.Clear();
                 httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", aadAccessToken);
                 httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
                 foreach (var slackChannel in slackChannels)
                 {
-                    // Assuming the folder is automatically created by Teams/SharePoint
-                    Console.WriteLine("Creating Teams Channel " + slackChannel.channelName + " with this Description " + slackChannel.channelDescription);
+                    Logger.Information("Creating Teams channel {ChannelName}", slackChannel.channelName);
 
                     try
                     {
-                        // Override Channel Name if it is "General" as it is a reserved name in MS Teams
                         string channelName = slackChannel.channelName;
                         if (channelName.ToLower() == "general")
                         {
                             channelName = "general" + new Random().Next(1000, 9999);
+                            Logger.Warning("Channel name 'general' is reserved. Using {NewName} instead", channelName);
                         }
 
-                        // Set up variables for retry logic
                         bool channelCreated = false;
                         int retryCount = 0;
                         const int maxRetries = 3;
 
                         while (!channelCreated && retryCount < maxRetries)
                         {
-                            // Construct the channel creation request payload
-                            var slackChannelAsMsChannelObject = new MsTeams.ChannelCreationRequest
+                            var channelRequest = new MsTeams.ChannelCreationRequest
                             {
                                 DisplayName = channelName,
                                 Description = slackChannel.channelDescription,
@@ -96,53 +129,48 @@ namespace ArgyleMigrator.Utils
                                 CreatedDateTime = DateTime.UtcNow.AddMonths(-6).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
                             };
 
-                            var createTeamsChannelPostData = JsonConvert.SerializeObject(slackChannelAsMsChannelObject);
+                            var requestJson = JsonConvert.SerializeObject(channelRequest);
+                            Logger.Debug("Attempt {RetryCount}: Creating channel with payload: {Payload}", retryCount + 1, requestJson);
 
-                            // Log request data for debugging purposes
-                            Console.WriteLine($"Attempt {retryCount + 1}: Request Payload: " + createTeamsChannelPostData);
-
-                            // Create the RestSharp client
                             var client = new RestClient("https://graph.microsoft.com/v1.0");
-
-                            // Create the request
                             var request = new RestRequest($"teams/{teamId}/channels", Method.Post);
                             request.AddHeader("Authorization", $"Bearer {aadAccessToken}");
                             request.AddHeader("Content-Type", "application/json");
-                            request.AddJsonBody(createTeamsChannelPostData);
+                            request.AddJsonBody(requestJson);
 
-                            // Execute the request
                             var response = await client.ExecuteAsync(request);
 
-                            // Check response status and log it
                             if (response.IsSuccessful)
                             {
-                                Console.WriteLine("Channel created successfully.");
+                                Logger.Information("Successfully created channel {ChannelName}", channelName);
 
-                                // Parse the response to get the created channel details
-                                var createdMsTeamsChannel = JsonConvert.DeserializeObject<MsTeams.Channel>(response.Content);
-
-                                // Add mapping for created channel (FolderId can be omitted if not required)
-                                combinedChannelsMapping.Add(new Combined.ChannelsMapping()
+                                var createdChannel = JsonConvert.DeserializeObject<MsTeams.Channel>(response.Content);
+                                var channelMapping = new Combined.ChannelsMapping()
                                 {
-                                    Id = createdMsTeamsChannel.Id,
-                                    DisplayName = createdMsTeamsChannel.DisplayName,
-                                    Description = createdMsTeamsChannel.Description,
+                                    Id = createdChannel.Id,
+                                    DisplayName = createdChannel.DisplayName,
+                                    Description = createdChannel.Description,
                                     slackChannelId = slackChannel.channelId,
                                     slackChannelName = slackChannel.channelName,
+                                };
+                                combinedChannelsMapping.Add(channelMapping);
+
+                                // Update migration state
+                                MigrationStateManager.UpdateChannelState(createdChannel.Id, state =>
+                                {
+                                    state.ChannelName = channelName;
+                                    state.SlackChannelId = slackChannel.channelId;
+                                    state.ChannelCreated = true;
                                 });
 
-                                // Mark the channel as created and exit the loop
                                 channelCreated = true;
-
-                                // Wait for a while to avoid throttling
-                                await Task.Delay(2000);
+                                await Task.Delay(2000); // Throttling delay
                             }
                             else
                             {
-                                Console.WriteLine($"Error creating channel: {response.StatusCode} - {response.StatusDescription}");
-                                Console.WriteLine("Response Details: " + response.Content);
+                                Logger.Error("Failed to create channel. Status: {StatusCode}, Response: {Response}",
+                                    response.StatusCode, response.Content);
 
-                                // Parse the response to see if the error is related to a duplicate name
                                 if (response.Content != null)
                                 {
                                     var responseJson = JObject.Parse(response.Content);
@@ -150,36 +178,29 @@ namespace ArgyleMigrator.Utils
 
                                     if (errorCode == "NameAlreadyExists")
                                     {
-                                        // Append a random number to the channel name to attempt creating a unique one
                                         channelName = slackChannel.channelName + new Random().Next(1000, 9999);
-                                        Console.WriteLine($"Duplicate channel name detected. Retrying with new name: {channelName}");
+                                        Logger.Warning("Channel name already exists. Retrying with {NewName}", channelName);
                                     }
                                     else
                                     {
-                                        // If it's a different kind of error, log it and break
-                                        Console.WriteLine("Unrecoverable error occurred. Exiting retry loop.");
+                                        Logger.Error("Unrecoverable error occurred. Error code: {ErrorCode}", errorCode);
                                         break;
                                     }
                                 }
 
-                                // Increment the retry count
                                 retryCount++;
                             }
                         }
 
-                        // If the maximum number of retries has been reached, log a failure message
                         if (!channelCreated)
                         {
-                            Console.WriteLine("Failed to create the channel after multiple attempts.");
+                            Logger.Error("Failed to create channel {ChannelName} after {MaxRetries} attempts", 
+                                slackChannel.channelName, maxRetries);
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine("An error occurred: " + ex.Message);
-                        if (ex.InnerException != null)
-                        {
-                            Console.WriteLine("Inner exception: " + ex.InnerException.Message);
-                        }
+                        Logger.Error(ex, "Error creating channel {ChannelName}", slackChannel.channelName);
                     }
                 }
 
@@ -189,84 +210,65 @@ namespace ArgyleMigrator.Utils
 
         public static async Task<string> GetFilesFolderInfo(string aadAccessToken, string teamId, string channelId)
         {
-            // Create RestSharp client
             var client = new RestClient("https://graph.microsoft.com");
-
-            // Create the RestSharp request
             var request = new RestRequest($"v1.0/teams/{teamId}/channels/{channelId}/filesFolder", Method.Get);
             request.AddHeader("Authorization", $"Bearer {aadAccessToken}");
             request.AddHeader("Accept", "application/json");
 
             try
             {
-                // Execute the request
+                Logger.Debug("Retrieving files folder information for channel {ChannelId}", channelId);
                 var response = await client.ExecuteAsync(request);
 
-                // Check the response status
                 if (response.IsSuccessful)
                 {
-                    Console.WriteLine("Successfully retrieved files folder information.");
-                    Console.WriteLine("Response Content: " + response.Content);
-
-                    // Deserialize the JSON response (if necessary)
+                    Logger.Information("Successfully retrieved files folder information");
                     var responseData = JsonConvert.DeserializeObject<ChannelFileFolderResponse>(response.Content);
-
-                    // Return the webUrl
                     return responseData?.webUrl;
                 }
                 else
                 {
-                    Console.WriteLine($"Error retrieving files folder info: {response.StatusCode} - {response.StatusDescription}");
-                    Console.WriteLine("Response Details: " + response.Content);
-                    return null; // Handle error appropriately
+                    Logger.Error("Failed to retrieve files folder info. Status: {StatusCode}, Response: {Response}",
+                        response.StatusCode, response.Content);
+                    return null;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("An error occurred while retrieving files folder info: " + ex.Message);
-                if (ex.InnerException != null)
-                {
-                    Console.WriteLine("Inner exception: " + ex.InnerException.Message);
-                }
-                return null; // Handle errors appropriately
+                Logger.Error(ex, "Error retrieving files folder information for channel {ChannelId}", channelId);
+                return null;
             }
         }
 
         public static async Task<bool> CompleteChannelMigration(string aadAccessToken, string teamId, string channelId)
         {
-            // Create RestSharp client
-            var client = new RestClient("https://graph.microsoft.com/v1.0");
-
-            // Create the RestSharp request
-            var request = new RestRequest($"teams/{teamId}/channels/{channelId}/completeMigration", Method.Post);
-            request.AddHeader("Authorization", $"Bearer {aadAccessToken}");
-            request.AddHeader("Content-Type", "application/json");
-
             try
             {
-                // Execute the request
+                Logger.Information("Completing migration for channel {ChannelId} in team {TeamId}", channelId, teamId);
+                
+                var client = new RestClient("https://graph.microsoft.com/v1.0");
+                var request = new RestRequest($"teams/{teamId}/channels/{channelId}/completeMigration", Method.Post);
+                request.AddHeader("Authorization", $"Bearer {aadAccessToken}");
+                request.AddHeader("Content-Type", "application/json");
+
                 var response = await client.ExecuteAsync(request);
 
-                // Check response status and log it
                 if (response.IsSuccessful)
                 {
-                    Console.WriteLine($"Channel migration completed successfully for Channel ID: {channelId}");
+                    Logger.Information("Successfully completed channel migration");
                     return true;
                 }
                 else
                 {
-                    Console.WriteLine($"Error completing channel migration: {response.StatusCode} - {response.StatusDescription}");
-                    Console.WriteLine("Response Details: " + response.Content);
+                    Logger.Error("Failed to complete channel migration. Status: {StatusCode}, Response: {Response}",
+                        response.StatusCode, response.Content);
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("An error occurred while completing channel migration: " + ex.Message);
-                if (ex.InnerException != null)
-                {
-                    Console.WriteLine("Inner exception: " + ex.InnerException.Message);
-                }
+                Logger.Error(ex, "Error completing channel migration for channel {ChannelId} in team {TeamId}", 
+                    channelId, teamId);
                 return false;
             }
         }

@@ -51,7 +51,7 @@ namespace ArgyleMigrator.Utils
             }
             else
             {
-                Console.WriteLine($"Error getting channel folder ID: {response.StatusCode} - {response.StatusDescription}");
+                Logger.Error($"Error getting channel folder ID: {response.StatusCode} - {response.StatusDescription}");
             }
             return null;
         }
@@ -71,7 +71,7 @@ namespace ArgyleMigrator.Utils
             }
             else
             {
-                Console.WriteLine($"Error getting root drive ID: {response.StatusCode} - {response.StatusDescription}");
+                Logger.Error($"Error getting root drive ID: {response.StatusCode} - {response.StatusDescription}");
                 return null;
             }
         }
@@ -93,19 +93,19 @@ namespace ArgyleMigrator.Utils
 
                 if (response.IsSuccessful)
                 {
-                    Console.WriteLine("File successfully uploaded to the channel folder.");
+                    Logger.Information("File successfully uploaded to the channel folder.");
                     return true;
                 }
                 else
                 {
-                    Console.WriteLine($"File upload failed: {response.StatusCode} - {response.StatusDescription}");
-                    Console.WriteLine("Response Details: " + response.Content);
+                    Logger.Error($"File upload failed: {response.StatusCode} - {response.StatusDescription}");
+                    Logger.Error("Response Details: " + response.Content);
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Exception: {ex.Message}");
+                Logger.Error($"Exception: {ex.Message}");
                 return false;
             }
         }
@@ -113,34 +113,51 @@ namespace ArgyleMigrator.Utils
 
         public static string DecompressSlackArchiveFile(string zipFilePath, string tempPath)
         {
-
-            if (File.Exists(tempPath))
+            try
             {
-                File.Delete(tempPath);
-            }
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
 
-            if (Directory.Exists(tempPath))
+                Directory.CreateDirectory(tempPath);
+                Logger.Information("Creating temp directory for Slack archive decompression at {TempPath}", tempPath);
+                
+                ZipFile.ExtractToDirectory(zipFilePath, tempPath);
+                Logger.Information("Slack archive successfully decompressed");
+
+                return tempPath;
+            }
+            catch (Exception ex)
             {
-                Directory.Delete(tempPath, true);
-                Console.WriteLine("Deleting pre-existing temp directory");
+                Logger.Error(ex, "Failed to decompress Slack archive file from {ZipPath} to {TempPath}", zipFilePath, tempPath);
+                throw;
             }
-
-            Directory.CreateDirectory(tempPath);
-            Console.WriteLine("Creating temp directory for Slack archive decompression");
-            Console.WriteLine("Temp path is " + tempPath);
-            ZipFile.ExtractToDirectory(zipFilePath, tempPath);
-            Console.WriteLine("Slack archive decompression done");
-
-            return tempPath;
         }
 
         public static void CleanUpTempDirectoriesAndFiles(string tempPath)
         {
-            Console.WriteLine("\n");
-            Console.WriteLine("Cleaning up Slack archive temp directories and files");
-            Directory.Delete(tempPath, true);
-            File.Delete(tempPath);
-            Console.WriteLine("Deleted " + tempPath + " and subdirectories");
+            try
+            {
+                Logger.Information("Cleaning up temporary directories and files at {TempPath}", tempPath);
+                
+                if (Directory.Exists(tempPath))
+                {
+                    Directory.Delete(tempPath, true);
+                }
+                
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+                
+                Logger.Information("Cleanup completed successfully");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Failed to clean up temporary directories and files at {TempPath}", tempPath);
+                throw;
+            }
         }
     }
 }
